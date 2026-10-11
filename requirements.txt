@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+boto3
+pydantic
+pydantic-settings
+httpx
+pytest
+pytest-asyncio
+ruff
