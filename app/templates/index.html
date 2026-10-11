@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · CloudSage{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">AWS infrastructure intelligence</p>
+    <h1>EC2 dashboard</h1>
+    <p class="muted">Stage 1 uses safe fake data while we build the workflow.</p>
+  </div>
+  <button class="button secondary" hx-get="/instances" hx-target="#instance-list" hx-swap="innerHTML">
+    Refresh instances
+  </button>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Instances</h2>
+      <p class="muted">Select an instance to inspect its configuration.</p>
+    </div>
+    <span class="badge">{{ instances|length }} resources</span>
+  </div>
+  <div id="instance-list">
+    {% include "partials/instance_list.html" %}
+  </div>
+</section>
+{% endblock %}

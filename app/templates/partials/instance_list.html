@@ -1,0 +1,26 @@
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Instance ID</th>
+        <th>Type</th>
+        <th>State</th>
+        <th>Region</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for instance in instances %}
+      <tr>
+        <td><strong>{{ instance.name }}</strong></td>
+        <td><code>{{ instance.id }}</code></td>
+        <td>{{ instance.type }}</td>
+        <td><span class="status {{ instance.state }}">{{ instance.state }}</span></td>
+        <td>{{ instance.region }}</td>
+        <td><a class="button small" href="/instances/{{ instance.id }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

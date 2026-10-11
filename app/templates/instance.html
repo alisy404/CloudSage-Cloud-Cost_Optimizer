@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ instance.name }} · CloudSage{% endblock %}
+
+{% block content %}
+<p><a class="back-link" href="/">← Back to dashboard</a></p>
+<section class="hero compact">
+  <div>
+    <p class="eyebrow">EC2 instance</p>
+    <h1>{{ instance.name }}</h1>
+    <p class="muted"><code>{{ instance.id }}</code></p>
+  </div>
+  <span class="status {{ instance.state }}">{{ instance.state }}</span>
+</section>
+
+<section class="details-grid">
+  <div class="detail-card"><span>Instance type</span><strong>{{ instance.type }}</strong></div>
+  <div class="detail-card"><span>Region</span><strong>{{ instance.region }}</strong></div>
+  <div class="detail-card"><span>Metrics</span><strong>Not connected yet</strong></div>
+  <div class="detail-card"><span>Analysis</span><strong>Stage 4</strong></div>
+</section>
+{% endblock %}
