@@ -6,7 +6,7 @@ This file is durable context for future development sessions. Update it when a d
 
 - **Project:** CloudSage
 - **Purpose:** AI-powered AWS infrastructure cost optimization
-- **Current state:** Stage 0 and Stage 1 complete. Stage 2 (real EC2 discovery) in progress.
+- **Current state:** Stage 0, 1, 2, 3 complete. Stage 4 (deterministic analysis) is next.
 - **Initial service:** EC2
 - **Initial optimization:** rightsizing/underutilization
 - **Initial interface:** Server-rendered Jinja2 + HTMX dashboard (FastAPI backend)

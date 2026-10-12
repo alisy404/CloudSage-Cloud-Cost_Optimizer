@@ -1,6 +1,23 @@
+"""API-level tests for the dashboard and instance routes.
+
+Settings are overridden so tests always use fake adapters, regardless of
+any .env or environment variables present on the machine.
+"""
+from __future__ import annotations
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _force_fake_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure every test in this module uses offline fake adapters."""
+    monkeypatch.setattr(settings, "aws_mode", False)
+    monkeypatch.setattr(settings, "aws_region", "ap-south-1")
+
 
 client = TestClient(app)
 
@@ -18,6 +35,15 @@ def test_instance_detail() -> None:
 
     assert response.status_code == 200
     assert "t3.large" in response.text
+
+
+def test_instance_detail_shows_metrics() -> None:
+    response = client.get("/instances/i-0123456789abcdef0")
+
+    assert response.status_code == 200
+    # Metric cards should appear for the running instance.
+    assert "CPU utilisation" in response.text
+    assert "Network in" in response.text
 
 
 def test_unknown_instance_returns_not_found() -> None:

@@ -1,22 +1,122 @@
 {% extends "base.html" %}
 
-{% block title %}{{ instance.name }} · CloudSage{% endblock %}
+{% block title %}{{ instance.name or instance.id }} · CloudSage{% endblock %}
 
 {% block content %}
 <p><a class="back-link" href="/">← Back to dashboard</a></p>
+
+{# ── Instance header ─────────────────────────────────────────────────────── #}
 <section class="hero compact">
   <div>
     <p class="eyebrow">EC2 instance</p>
-    <h1>{{ instance.name }}</h1>
-    <p class="muted"><code>{{ instance.id }}</code></p>
+    <h1>{{ instance.name or "—" }}</h1>
+    <p class="muted"><code>{{ instance.id }}</code> · {{ instance.region }}</p>
   </div>
   <span class="status {{ instance.state }}">{{ instance.state }}</span>
 </section>
 
-<section class="details-grid">
+{# ── Instance detail cards ────────────────────────────────────────────────── #}
+<section class="details-grid" style="margin-bottom:32px">
   <div class="detail-card"><span>Instance type</span><strong>{{ instance.type }}</strong></div>
   <div class="detail-card"><span>Region</span><strong>{{ instance.region }}</strong></div>
-  <div class="detail-card"><span>Metrics</span><strong>Not connected yet</strong></div>
-  <div class="detail-card"><span>Analysis</span><strong>Stage 4</strong></div>
+  <div class="detail-card">
+    <span>Launch time</span>
+    <strong>{{ instance.launch_time.strftime("%Y-%m-%d") if instance.launch_time else "—" }}</strong>
+  </div>
+  {% for k, v in instance.tags.items() %}
+  <div class="detail-card"><span>{{ k }}</span><strong>{{ v }}</strong></div>
+  {% endfor %}
+</section>
+
+{# ── CloudWatch metrics ───────────────────────────────────────────────────── #}
+<section class="panel" style="margin-bottom:32px">
+  <div class="panel-heading">
+    <div>
+      <h2>CloudWatch metrics</h2>
+      <p class="muted">{{ window_days }}-day window{% if metrics %} · fetched {{ metrics.fetched_at.strftime("%Y-%m-%d %H:%M UTC") }}{% endif %}</p>
+    </div>
+    {% if metrics %}
+    <span class="badge">{{ window_days }}d</span>
+    {% endif %}
+  </div>
+
+  {% if metrics_error %}
+  <div class="alert-error" style="margin:0 24px 24px"><strong>CloudWatch error:</strong> {{ metrics_error }}</div>
+  {% endif %}
+
+  {% if metrics %}
+  {# ── Metric summary cards ── #}
+  {% set metric_list = [
+      ("CPU utilisation", metrics.cpu, "%"),
+      ("Network in",      metrics.network_in, "B"),
+      ("Network out",     metrics.network_out, "B"),
+      ("Status check failures", metrics.status_check_failed, ""),
+  ] %}
+
+  <div class="metric-cards">
+    {% for label, m, suffix in metric_list %}
+    <div class="metric-card {% if m.status == 'unavailable' %}metric-unavailable{% elif m.status == 'insufficient_data' %}metric-warn{% endif %}">
+      <div class="metric-title">{{ label }}</div>
+      {% if m.status == 'unavailable' %}
+        <div class="metric-value unavail">Unavailable</div>
+        <div class="metric-sub">No data returned by CloudWatch</div>
+      {% elif m.status == 'insufficient_data' %}
+        <div class="metric-value warn">{{ "%.1f"|format(m.average) if m.average is not none else "—" }}{{ suffix }}</div>
+        <div class="metric-sub">⚠ Insufficient data for P95 ({{ m.sample_count }} samples)</div>
+      {% else %}
+        <div class="metric-value">{{ "%.1f"|format(m.average) if m.average is not none else "—" }}{{ suffix }}</div>
+        <div class="metric-sub">avg · P95 {{ "%.1f"|format(m.p95) if m.p95 is not none else "—" }}{{ suffix }} · max {{ "%.1f"|format(m.maximum) if m.maximum is not none else "—" }}{{ suffix }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Metric detail table ── #}
+  <div class="table-wrap" style="margin-top:0">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Unit</th>
+          <th>Average</th>
+          <th>P95</th>
+          <th>Maximum</th>
+          <th>Samples</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for label, m, suffix in metric_list %}
+        <tr>
+          <td><strong>{{ label }}</strong></td>
+          <td class="muted">{{ m.unit }}</td>
+          <td>{{ "%.2f"|format(m.average) if m.average is not none else "—" }}</td>
+          <td>{{ "%.2f"|format(m.p95) if m.p95 is not none else "—" }}</td>
+          <td>{{ "%.2f"|format(m.maximum) if m.maximum is not none else "—" }}</td>
+          <td>{{ m.sample_count }}</td>
+          <td>
+            {% if m.status == 'ok' %}<span class="status running">ok</span>
+            {% elif m.status == 'insufficient_data' %}<span class="status">low data</span>
+            {% else %}<span class="status stopped">unavailable</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif not metrics_error %}
+  <p class="muted" style="padding:24px">Metrics could not be loaded.</p>
+  {% endif %}
+</section>
+
+{# ── Analysis placeholder (Stage 4) ─────────────────────────────────────── #}
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Analysis</h2>
+      <p class="muted">Deterministic candidate evaluation — coming in Stage 4.</p>
+    </div>
+    <span class="badge">Stage 4</span>
+  </div>
 </section>
 {% endblock %}

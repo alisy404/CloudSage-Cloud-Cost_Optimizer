@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # When True the app uses real AWS APIs; when False it uses the fake adapter.
     aws_mode: bool = False
 
+    # Number of days of CloudWatch history to retrieve (7 first, 30 later).
+    cloudwatch_window_days: int = 7
+
     llm_provider: str = ""
     llm_api_key: str = ""
 
