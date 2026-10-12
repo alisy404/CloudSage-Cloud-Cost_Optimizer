@@ -6,10 +6,10 @@ This file is durable context for future development sessions. Update it when a d
 
 - **Project:** CloudSage
 - **Purpose:** AI-powered AWS infrastructure cost optimization
-- **Current state:** documentation and planning files exist; application code is not yet implemented.
+- **Current state:** Stage 0 and Stage 1 complete. Stage 2 (real EC2 discovery) in progress.
 - **Initial service:** EC2
 - **Initial optimization:** rightsizing/underutilization
-- **Initial interface:** CLI/API before a sophisticated UI
+- **Initial interface:** Server-rendered Jinja2 + HTMX dashboard (FastAPI backend)
 
 ## Non-negotiable decisions
 
@@ -25,19 +25,18 @@ This file is durable context for future development sessions. Update it when a d
 
 ## Current target milestone
 
-Build the first read-only EC2 path:
+Stage 2 — Real EC2 discovery:
 
-```text
-EC2 discovery
-  -> CloudWatch metrics
-  -> Cost Explorer data
-  -> normalized observations
-  -> deterministic candidate
-  -> bounded context
-  -> one-provider structured AI analysis
-  -> validated recommendation
-  -> PostgreSQL/API response
-```
+- `app/config.py` — pydantic-settings, AWS_MODE toggle, AWS_REGION, APP_ENV
+- `app/aws/ec2.py` — `EC2Client` interface + `BotoEC2Adapter` + `FakeEC2Adapter`
+- `app/models.py` — `EC2Instance` Pydantic model
+- `app/main.py` — switch between fake/real adapter based on AWS_MODE env var
+- Unit tests in `tests/unit/aws/` with mocked boto3
+
+Required AWS permissions (read-only):
+- `ec2:DescribeInstances`
+- `ec2:DescribeTags`
+- `sts:GetCallerIdentity`
 
 This milestone must not apply infrastructure.
 

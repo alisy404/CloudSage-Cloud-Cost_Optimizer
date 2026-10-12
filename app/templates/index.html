@@ -7,12 +7,18 @@
   <div>
     <p class="eyebrow">AWS infrastructure intelligence</p>
     <h1>EC2 dashboard</h1>
-    <p class="muted">Stage 1 uses safe fake data while we build the workflow.</p>
+    <p class="muted">
+      {% if settings_aws_mode %}Real AWS data · {{ settings_region }}{% else %}Development mode · fake data{% endif %}
+    </p>
   </div>
   <button class="button secondary" hx-get="/instances" hx-target="#instance-list" hx-swap="innerHTML">
     Refresh instances
   </button>
 </section>
+
+{% if error %}
+<div class="alert-error"><strong>AWS error:</strong> {{ error }}</div>
+{% endif %}
 
 <section class="panel">
   <div class="panel-heading">
@@ -27,3 +33,4 @@
   </div>
 </section>
 {% endblock %}
+
