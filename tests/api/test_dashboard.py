@@ -58,3 +58,11 @@ def test_instance_list_partial() -> None:
     assert response.status_code == 200
     assert "Refresh instances" not in response.text
     assert "api-server" in response.text
+
+
+def test_instance_detail_shows_analysis_result() -> None:
+    response = client.get("/instances/i-0123456789abcdef0")
+
+    assert response.status_code == 200
+    assert "Rightsizing analysis" in response.text
+    assert "Fact checks &amp; safety gates" in response.text or "Fact checks & safety gates" in response.text

@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.analysis.candidate import evaluate as evaluate_candidate
 from app.aws.cloudwatch import (
     BotoCloudWatchAdapter,
     CloudWatchClient,
@@ -124,6 +125,17 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
     except RuntimeError as exc:
         metrics_error = str(exc)
 
+    # Deterministic candidate evaluation (Stage 4).
+    candidate_result = None
+    if metrics is not None:
+        candidate_result = evaluate_candidate(
+            instance=instance,
+            metrics=metrics,
+            cpu_avg_threshold=settings.analysis_cpu_avg_threshold,
+            cpu_p95_threshold=settings.analysis_cpu_p95_threshold,
+            cpu_max_threshold=settings.analysis_cpu_max_threshold,
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="instance.html",
@@ -133,5 +145,6 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
             "metrics": metrics.model_dump() if metrics else None,
             "metrics_error": metrics_error,
             "window_days": settings.cloudwatch_window_days,
+            "candidate_result": candidate_result.model_dump() if candidate_result else None,
         },
     )

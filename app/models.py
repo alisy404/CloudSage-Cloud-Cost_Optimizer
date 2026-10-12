@@ -56,3 +56,42 @@ class InstanceMetrics(BaseModel):
     network_in: MetricSummary
     network_out: MetricSummary
     status_check_failed: MetricSummary
+
+
+# ---------------------------------------------------------------------------
+# Deterministic analysis models (Stage 4)
+# ---------------------------------------------------------------------------
+
+
+class CandidateDecision(str, Enum):
+    """Outcome of the deterministic rightsizing candidate evaluation."""
+
+    candidate = "candidate"            # Safe to send to AI for recommendation
+    not_candidate = "not_candidate"    # Evidence says resource is appropriately sized
+    needs_more_data = "needs_more_data"  # Not enough history to decide
+
+
+class AnalysisFact(BaseModel):
+    """A single evidence check performed by the evaluator."""
+
+    label: str              # Human-readable check name
+    observed: str           # What was measured (e.g. "4.2 %")
+    threshold: str | None   # Threshold that was applied (e.g. "< 10 %")
+    passed: bool            # True = within acceptable range for candidacy
+
+
+class CandidateResult(BaseModel):
+    """Full deterministic candidate evaluation result."""
+
+    instance_id: str
+    decision: CandidateDecision
+    reason: str                   # Primary human-readable reason for the decision
+    facts: list[AnalysisFact]     # All checks performed, with pass/fail
+
+    # Thresholds used — stored for auditability.
+    cpu_avg_threshold: float
+    cpu_p95_threshold: float
+    cpu_max_threshold: float
+
+    analyzed_at: datetime
+

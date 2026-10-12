@@ -6,7 +6,7 @@ This file is durable context for future development sessions. Update it when a d
 
 - **Project:** CloudSage
 - **Purpose:** AI-powered AWS infrastructure cost optimization
-- **Current state:** Stage 0, 1, 2, 3 complete. Stage 4 (deterministic analysis) is next.
+- **Current state:** Stages 0–4 complete. Stage 5 (cost estimation & pricing) is next.
 - **Initial service:** EC2
 - **Initial optimization:** rightsizing/underutilization
 - **Initial interface:** Server-rendered Jinja2 + HTMX dashboard (FastAPI backend)
@@ -23,22 +23,20 @@ This file is durable context for future development sessions. Update it when a d
 - The initial AWS role is read-only; no unrestricted write access is given to the LLM.
 - Fail closed for incomplete evidence, invalid output, policy failure, unexpected Terraform plans, missing approval, or provider failure.
 
+## Completed stages
+
+- **Stage 0** — venv, dependencies, minimal FastAPI, placeholder test.
+- **Stage 1** — Jinja2 + HTMX dashboard, fake EC2 data, dark-theme CSS.
+- **Stage 2** — Real EC2 discovery: `EC2Client` interface, boto3 adapter, fake adapter, pydantic-settings config, `EC2Instance` model.
+- **Stage 3** — CloudWatch metrics: `CloudWatchClient` interface, boto3 adapter, `MetricSummary`/`InstanceMetrics` models, metric cards + table on instance page.
+- **Stage 4** — Deterministic analysis: `CandidateEvaluator` (`app/analysis/candidate.py`), configurable CPU thresholds, safety gates, `CandidateResult` model, UI decision card and checks table.
+
 ## Current target milestone
 
-Stage 2 — Real EC2 discovery:
-
-- `app/config.py` — pydantic-settings, AWS_MODE toggle, AWS_REGION, APP_ENV
-- `app/aws/ec2.py` — `EC2Client` interface + `BotoEC2Adapter` + `FakeEC2Adapter`
-- `app/models.py` — `EC2Instance` Pydantic model
-- `app/main.py` — switch between fake/real adapter based on AWS_MODE env var
-- Unit tests in `tests/unit/aws/` with mocked boto3
-
-Required AWS permissions (read-only):
-- `ec2:DescribeInstances`
-- `ec2:DescribeTags`
-- `sts:GetCallerIdentity`
-
-This milestone must not apply infrastructure.
+Stage 5 — Cost estimation & baseline pricing:
+- Deterministic hourly and monthly cost calculations for EC2 instances
+- Pricing catalog / data model for instance types
+- Surface estimated spend and potential savings calculations on instance detail and dashboard
 
 ## Planned progression
 

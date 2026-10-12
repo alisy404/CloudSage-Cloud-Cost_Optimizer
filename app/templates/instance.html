@@ -109,14 +109,63 @@
   {% endif %}
 </section>
 
-{# ── Analysis placeholder (Stage 4) ─────────────────────────────────────── #}
-<section class="panel">
+{# ── Deterministic Analysis (Stage 4) ────────────────────────────────────── #}
+<section class="panel" id="analysis-panel">
   <div class="panel-heading">
     <div>
-      <h2>Analysis</h2>
-      <p class="muted">Deterministic candidate evaluation — coming in Stage 4.</p>
+      <h2>Rightsizing analysis</h2>
+      <p class="muted">Deterministic rule-based evaluation before AI</p>
     </div>
-    <span class="badge">Stage 4</span>
+    {% if candidate_result %}
+      {% if candidate_result.decision == 'candidate' %}
+        <span class="status running" style="font-size:0.85rem">Candidate for rightsizing</span>
+      {% elif candidate_result.decision == 'needs_more_data' %}
+        <span class="status" style="font-size:0.85rem">Needs more data</span>
+      {% else %}
+        <span class="status stopped" style="font-size:0.85rem">Not a candidate</span>
+      {% endif %}
+    {% endif %}
   </div>
+
+  {% if candidate_result %}
+    <div style="padding:0 24px 20px">
+      <div style="background:var(--bg-subtle, #181b20); border:1px solid var(--border, #2a2f38); border-radius:8px; padding:16px 20px; margin-bottom:20px">
+        <strong style="display:block; margin-bottom:6px">Summary</strong>
+        <p style="margin:0; color:var(--text-muted, #94a3b8)">{{ candidate_result.reason }}</p>
+      </div>
+
+      <h3 style="font-size:1rem; margin-bottom:12px">Fact checks & safety gates</h3>
+      <div class="table-wrap" style="margin-top:0">
+        <table>
+          <thead>
+            <tr>
+              <th>Evaluation check</th>
+              <th>Observed</th>
+              <th>Threshold / Rule</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fact in candidate_result.facts %}
+            <tr>
+              <td><strong>{{ fact.label }}</strong></td>
+              <td>{{ fact.observed }}</td>
+              <td class="muted">{{ fact.threshold or "—" }}</td>
+              <td>
+                {% if fact.passed %}
+                  <span class="status running">Pass</span>
+                {% else %}
+                  <span class="status stopped">Fail</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="muted" style="padding:24px">Metrics required for rightsizing analysis.</p>
+  {% endif %}
 </section>
 {% endblock %}

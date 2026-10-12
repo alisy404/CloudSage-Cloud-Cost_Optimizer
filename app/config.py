@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # Number of days of CloudWatch history to retrieve (7 first, 30 later).
     cloudwatch_window_days: int = 7
 
+    # Deterministic analysis thresholds (Stage 4).
+    # An instance is a rightsizing candidate only when ALL three are satisfied.
+    analysis_cpu_avg_threshold: float = 10.0   # % — average must be below this
+    analysis_cpu_p95_threshold: float = 25.0   # % — P95 must be below this (spike safety)
+    analysis_cpu_max_threshold: float = 50.0   # % — max must be below this (burst safety)
+
     llm_provider: str = ""
     llm_api_key: str = ""
 
