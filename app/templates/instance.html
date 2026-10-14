@@ -23,6 +23,13 @@
     <span>Launch time</span>
     <strong>{{ instance.launch_time.strftime("%Y-%m-%d") if instance.launch_time else "—" }}</strong>
   </div>
+  {% if savings and savings.current_monthly_usd is not none %}
+  <div class="detail-card">
+    <span>Est. Monthly Spend</span>
+    <strong style="color:#76e1bd">${{ "%.2f"|format(savings.current_monthly_usd) }}</strong>
+    <span class="muted" style="font-size:0.75rem; margin-top:4px">(${{ "%.4f"|format(savings.current_hourly_usd) }}/h)</span>
+  </div>
+  {% endif %}
   {% for k, v in instance.tags.items() %}
   <div class="detail-card"><span>{{ k }}</span><strong>{{ v }}</strong></div>
   {% endfor %}
@@ -167,5 +174,73 @@
   {% else %}
     <p class="muted" style="padding:24px">Metrics required for rightsizing analysis.</p>
   {% endif %}
+</section>
+
+{# ── Cost & Potential Savings (Stage 5) ──────────────────────────────────── #}
+<section class="panel" style="margin-top:32px">
+  <div class="panel-heading">
+    <div>
+      <h2>Cost & prospective savings</h2>
+      <p class="muted">Deterministic pricing & rightsizing alternatives (730 h/mo)</p>
+    </div>
+    {% if savings and savings.recommended_alternative %}
+      <span class="status running" style="font-size:0.85rem">
+        Save up to ${{ "%.2f"|format(savings.recommended_alternative.monthly_savings_usd) }}/mo ({{ "%.0f"|format(savings.recommended_alternative.savings_pct) }}%)
+      </span>
+    {% elif savings and savings.current_monthly_usd %}
+      <span class="badge">${{ "%.2f"|format(savings.current_monthly_usd) }}/mo</span>
+    {% endif %}
+  </div>
+
+  <div style="padding:0 24px 24px">
+    {% if savings and savings.notes %}
+    <div style="background:var(--bg-subtle, #181b20); border:1px solid var(--border, #2a2f38); border-radius:8px; padding:14px 18px; margin-bottom:20px">
+      {% for note in savings.notes %}
+      <p style="margin:2px 0; color:var(--text-muted, #9aa9c2); font-size:0.9rem">ℹ️ {{ note }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if savings and savings.alternatives %}
+    <h3 style="font-size:1rem; margin-bottom:12px">Downsizing options</h3>
+    <div class="table-wrap" style="margin-top:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Target type</th>
+            <th>vCPU</th>
+            <th>Memory (GiB)</th>
+            <th>Target Hourly</th>
+            <th>Target Monthly</th>
+            <th>Monthly Savings</th>
+            <th>Annual Savings</th>
+            <th>Savings %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for alt in savings.alternatives %}
+          <tr {% if savings.recommended_alternative and savings.recommended_alternative.target_type == alt.target_type %}style="background:rgba(118,225,189,0.08)"{% endif %}>
+            <td>
+              <strong>{{ alt.target_type }}</strong>
+              {% if savings.recommended_alternative and savings.recommended_alternative.target_type == alt.target_type %}
+                <span class="badge" style="background:#173d35; color:#76e1bd; margin-left:6px; font-size:0.7rem">Recommended</span>
+              {% endif %}
+            </td>
+            <td>{{ alt.target_vcpu }}</td>
+            <td>{{ alt.target_memory_gib }}</td>
+            <td>${{ "%.4f"|format(alt.target_hourly_usd) }}</td>
+            <td>${{ "%.2f"|format(alt.target_monthly_usd) }}</td>
+            <td style="color:#76e1bd"><strong>+${{ "%.2f"|format(alt.monthly_savings_usd) }}</strong></td>
+            <td style="color:#76e1bd">+${{ "%.2f"|format(alt.annual_savings_usd) }}</td>
+            <td><strong>{{ "%.1f"|format(alt.savings_pct) }}%</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted" style="margin:0">No smaller instance types available in this family chain, or instance is already at the smallest tier (nano).</p>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}

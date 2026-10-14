@@ -6,7 +6,7 @@ This file is durable context for future development sessions. Update it when a d
 
 - **Project:** CloudSage
 - **Purpose:** AI-powered AWS infrastructure cost optimization
-- **Current state:** Stages 0–4 complete. Stage 5 (cost estimation & pricing) is next.
+- **Current state:** Stages 0–5 complete. Stage 6 (single runtime AI provider) is next.
 - **Initial service:** EC2
 - **Initial optimization:** rightsizing/underutilization
 - **Initial interface:** Server-rendered Jinja2 + HTMX dashboard (FastAPI backend)
@@ -30,13 +30,15 @@ This file is durable context for future development sessions. Update it when a d
 - **Stage 2** — Real EC2 discovery: `EC2Client` interface, boto3 adapter, fake adapter, pydantic-settings config, `EC2Instance` model.
 - **Stage 3** — CloudWatch metrics: `CloudWatchClient` interface, boto3 adapter, `MetricSummary`/`InstanceMetrics` models, metric cards + table on instance page.
 - **Stage 4** — Deterministic analysis: `CandidateEvaluator` (`app/analysis/candidate.py`), configurable CPU thresholds, safety gates, `CandidateResult` model, UI decision card and checks table.
+- **Stage 5** — Cost estimation & deterministic savings: on-demand pricing catalog (`app/aws/pricing.py`), `calculate_savings()` service (`app/analysis/savings.py`), spend column on dashboard, and prospective savings panel with downsizing options on instance page.
 
 ## Current target milestone
 
-Stage 5 — Cost estimation & baseline pricing:
-- Deterministic hourly and monthly cost calculations for EC2 instances
-- Pricing catalog / data model for instance types
-- Surface estimated spend and potential savings calculations on instance detail and dashboard
+Stage 6 — Add the single runtime AI provider:
+- `LLMProvider` interface and provider adapter
+- Structured recommendation schema and Pydantic response validation
+- `OptimizationContext` builder from instance, metrics, facts, and deterministic savings
+- Safe prompt formatting (untrusted tags, no credentials, strictly bounded evidence)
 
 ## Planned progression
 

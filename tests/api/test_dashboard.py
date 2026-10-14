@@ -66,3 +66,20 @@ def test_instance_detail_shows_analysis_result() -> None:
     assert response.status_code == 200
     assert "Rightsizing analysis" in response.text
     assert "Fact checks &amp; safety gates" in response.text or "Fact checks & safety gates" in response.text
+
+
+def test_dashboard_shows_estimated_spend() -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Est. Monthly Spend" in response.text
+    assert "/mo" in response.text or "/h" in response.text
+
+
+def test_instance_detail_shows_cost_and_savings() -> None:
+    response = client.get("/instances/i-0123456789abcdef0")
+
+    assert response.status_code == 200
+    assert "Cost &amp; prospective savings" in response.text or "Cost & prospective savings" in response.text
+    assert "Downsizing options" in response.text
+    assert "Est. Monthly Spend" in response.text

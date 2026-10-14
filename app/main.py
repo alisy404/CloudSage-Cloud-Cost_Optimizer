@@ -6,12 +6,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.analysis.candidate import evaluate as evaluate_candidate
+from app.analysis.savings import calculate_savings
 from app.aws.cloudwatch import (
     BotoCloudWatchAdapter,
     CloudWatchClient,
     FakeCloudWatchAdapter,
 )
 from app.aws.ec2 import BotoEC2Adapter, EC2Client, FakeEC2Adapter
+from app.aws.pricing import get_instance_pricing
 from app.config import settings
 
 app = FastAPI(title="CloudSage", version="0.3.0")
@@ -65,6 +67,17 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _enrich_instances_with_pricing(instances: list) -> list[dict]:
+    enriched = []
+    for inst in instances:
+        d = inst.model_dump()
+        pricing = get_instance_pricing(inst.type, region=inst.region)
+        d["monthly_cost"] = f"${pricing.monthly_rate_usd:.2f}" if pricing else "—"
+        d["hourly_cost"] = f"${pricing.hourly_rate_usd:.4f}" if pricing else "—"
+        enriched.append(d)
+    return enriched
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     client = _get_ec2_client()
@@ -79,7 +92,7 @@ def dashboard(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={**_base_context(), "instances": [i.model_dump() for i in instances]},
+        context={**_base_context(), "instances": _enrich_instances_with_pricing(instances)},
     )
 
 
@@ -97,7 +110,7 @@ def instance_list(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="partials/instance_list.html",
-        context={**_base_context(), "instances": [i.model_dump() for i in instances]},
+        context={**_base_context(), "instances": _enrich_instances_with_pricing(instances)},
     )
 
 
@@ -136,6 +149,9 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
             cpu_max_threshold=settings.analysis_cpu_max_threshold,
         )
 
+    # Deterministic savings and cost calculations (Stage 5).
+    savings = calculate_savings(instance=instance, candidate_result=candidate_result)
+
     return templates.TemplateResponse(
         request=request,
         name="instance.html",
@@ -146,5 +162,6 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
             "metrics_error": metrics_error,
             "window_days": settings.cloudwatch_window_days,
             "candidate_result": candidate_result.model_dump() if candidate_result else None,
+            "savings": savings.model_dump(),
         },
     )

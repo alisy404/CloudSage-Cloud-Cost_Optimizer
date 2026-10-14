@@ -95,3 +95,61 @@ class CandidateResult(BaseModel):
 
     analyzed_at: datetime
 
+
+# ---------------------------------------------------------------------------
+# Pricing & savings models (Stage 5)
+# ---------------------------------------------------------------------------
+
+
+class InstancePricing(BaseModel):
+    """Deterministic on-demand pricing specification for an EC2 instance type."""
+
+    instance_type: str
+    region: str
+    hourly_rate_usd: float
+    monthly_rate_usd: float  # hourly_rate_usd * 730
+    vcpu: int
+    memory_gib: float
+    currency: str = "USD"
+    pricing_source: str = "AWS On-Demand Catalog"
+
+
+class RightsizingAlternative(BaseModel):
+    """A smaller target instance type and the resulting deterministic savings."""
+
+    target_type: str
+    target_vcpu: int
+    target_memory_gib: float
+    target_hourly_usd: float
+    target_monthly_usd: float
+
+    # Savings relative to current instance
+    monthly_savings_usd: float
+    annual_savings_usd: float
+    savings_pct: float
+
+
+class SavingsResult(BaseModel):
+    """Deterministic cost and savings summary for an instance."""
+
+    instance_id: str
+    instance_type: str
+    region: str
+    currency: str = "USD"
+
+    current_pricing: InstancePricing | None
+    is_candidate: bool
+    status_state: str  # e.g. "running" or "stopped"
+
+    # Current projected spend
+    current_hourly_usd: float | None = None
+    current_monthly_usd: float | None = None
+    current_annual_usd: float | None = None
+
+    # Available downsizing targets ordered by suitability/savings
+    alternatives: list[RightsizingAlternative] = []
+
+    # Best recommendation alternative (if any)
+    recommended_alternative: RightsizingAlternative | None = None
+    notes: list[str] = []
+
