@@ -1,0 +1,76 @@
+{% if analysis_error %}
+<div class="alert-error">
+  <strong>AI analysis unavailable:</strong> {{ analysis_error }}
+</div>
+{% elif recommendation %}
+<div class="recommendation-card">
+  <div class="recommendation-header">
+    <div>
+      <p class="eyebrow">{{ provider_name }} provider</p>
+      <h3>{{ recommendation.optimization_type|title }} recommendation</h3>
+    </div>
+    <span class="status {% if recommendation.decision == 'recommend' %}running{% else %}stopped{% endif %}">
+      {{ recommendation.decision|replace('_', ' ')|title }}
+    </span>
+  </div>
+
+  <div class="details-grid">
+    <div class="detail-card">
+      <span>Current configuration</span>
+      <strong>{{ recommendation.current_configuration.instance_type or "—" }}</strong>
+    </div>
+    <div class="detail-card">
+      <span>Proposed configuration</span>
+      <strong>{{ recommendation.recommended_configuration.instance_type or "No change" }}</strong>
+    </div>
+    <div class="detail-card">
+      <span>Risk</span>
+      <strong>{{ recommendation.risk|title }}</strong>
+    </div>
+    <div class="detail-card">
+      <span>Confidence</span>
+      <strong>{{ "%.0f"|format(recommendation.confidence * 100) }}%</strong>
+    </div>
+  </div>
+
+  {% if recommendation.reasoning %}
+  <h4>Reasoning</h4>
+  <ul>
+    {% for item in recommendation.reasoning %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if recommendation.evidence %}
+  <h4>Evidence</h4>
+  <ul>
+    {% for item in recommendation.evidence %}<li><strong>{{ item.source }}:</strong> {{ item.statement }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if recommendation.concerns %}
+  <h4>Concerns</h4>
+  <ul class="muted">
+    {% for item in recommendation.concerns %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if recommendation.required_validation %}
+  <h4>Required validation</h4>
+  <ul>
+    {% for item in recommendation.required_validation %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if recommendation.decision == 'recommend' %}
+  <div class="approval-placeholder">
+    Recommendation generated. Approval workflow will be added before Terraform changes are enabled.
+  </div>
+  {% endif %}
+</div>
+{% elif candidate_result %}
+<div class="alert-error">
+  <strong>AI analysis skipped:</strong> {{ candidate_result.reason }}
+</div>
+{% else %}
+<p class="muted">No recommendation was generated.</p>
+{% endif %}

@@ -47,3 +47,40 @@ code { color: #b9d9ff; font-family: ui-monospace, monospace; font-size: .9em; }
 .metric-value.warn { color: #ffc978; }
 .metric-sub { color: #7a90aa; font-size: .8rem; }
 
+.recommendation-card {
+  border: 1px solid var(--border, #2a2f38);
+  border-radius: 10px;
+  padding: 20px;
+  background: var(--bg-subtle, #181b20);
+}
+
+.recommendation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.recommendation-card h3,
+.recommendation-card h4 {
+  margin-top: 0;
+}
+
+.recommendation-card h4 {
+  margin-bottom: 8px;
+  margin-top: 20px;
+}
+
+.recommendation-card li {
+  margin: 6px 0;
+  color: var(--text-muted, #9aa9c2);
+}
+
+.approval-placeholder {
+  margin-top: 20px;
+  border: 1px solid rgba(118, 225, 189, 0.35);
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: #76e1bd;
+}

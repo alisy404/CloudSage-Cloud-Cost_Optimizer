@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     llm_provider: str = ""
     llm_api_key: str = ""
+    llm_model: str = ""
+    llm_base_url: str = ""
+    llm_timeout_seconds: float = 30.0
 
 
 settings = Settings()

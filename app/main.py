@@ -5,6 +5,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.ai.provider import FakeLLMProvider, LLMProvider, OpenAICompatibleProvider
+from app.ai.service import analyze_optimization
 from app.analysis.candidate import evaluate as evaluate_candidate
 from app.analysis.savings import calculate_savings
 from app.aws.cloudwatch import (
@@ -42,6 +44,18 @@ def _get_cloudwatch_client() -> CloudWatchClient:
     if settings.aws_mode:
         return BotoCloudWatchAdapter(region=settings.aws_region)
     return FakeCloudWatchAdapter()
+
+
+def _get_llm_provider() -> LLMProvider:
+    """Use the configured single provider, or the offline provider locally."""
+    if settings.llm_provider and settings.llm_provider.lower() != "fake":
+        return OpenAICompatibleProvider(
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model=settings.llm_model,
+            timeout=settings.llm_timeout_seconds,
+        )
+    return FakeLLMProvider()
 
 
 # ---------------------------------------------------------------------------
@@ -163,5 +177,74 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
             "window_days": settings.cloudwatch_window_days,
             "candidate_result": candidate_result.model_dump() if candidate_result else None,
             "savings": savings.model_dump(),
+        },
+    )
+
+
+@app.post("/instances/{instance_id}/analyze", response_class=HTMLResponse)
+def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
+    """Run Stage 6 AI analysis and return the recommendation UI partial."""
+    ec2 = _get_ec2_client()
+    cw = _get_cloudwatch_client()
+
+    try:
+        instance = ec2.get_instance(instance_id)
+    except RuntimeError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/recommendation.html",
+            context={"analysis_error": str(exc)},
+            status_code=502,
+        )
+    if instance is None:
+        raise HTTPException(status_code=404, detail="Instance not found")
+
+    try:
+        metrics = cw.get_instance_metrics(
+            instance_id=instance_id,
+            window_days=settings.cloudwatch_window_days,
+        )
+    except RuntimeError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/recommendation.html",
+            context={"analysis_error": str(exc)},
+            status_code=502,
+        )
+
+    candidate = evaluate_candidate(
+        instance=instance,
+        metrics=metrics,
+        cpu_avg_threshold=settings.analysis_cpu_avg_threshold,
+        cpu_p95_threshold=settings.analysis_cpu_p95_threshold,
+        cpu_max_threshold=settings.analysis_cpu_max_threshold,
+    )
+    savings = calculate_savings(instance=instance, candidate_result=candidate)
+
+    try:
+        _, recommendation = analyze_optimization(
+            instance=instance,
+            metrics=metrics,
+            candidate=candidate,
+            savings=savings,
+            provider=_get_llm_provider(),
+        )
+    except (ValueError, RuntimeError) as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/recommendation.html",
+            context={
+                "analysis_error": str(exc),
+                "candidate_result": candidate.model_dump(),
+            },
+            status_code=422,
+        )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/recommendation.html",
+        context={
+            "recommendation": recommendation.model_dump(),
+            "provider_name": _get_llm_provider().provider_name,
         },
     )

@@ -176,6 +176,29 @@
   {% endif %}
 </section>
 
+{# ── AI Recommendation (Stage 7) ─────────────────────────────────────────── #}
+<section class="panel" style="margin-top:32px" id="recommendation-panel">
+  <div class="panel-heading">
+    <div>
+      <h2>AI recommendation</h2>
+      <p class="muted">AI explains the deterministic evidence; it cannot access AWS or run Terraform.</p>
+    </div>
+    {% if candidate_result and candidate_result.decision == 'candidate' and metrics %}
+    <button class="button primary"
+            hx-post="/instances/{{ instance.id }}/analyze"
+            hx-target="#recommendation-result"
+            hx-swap="innerHTML">
+      Analyze with AI
+    </button>
+    {% else %}
+    <span class="badge">Candidate required</span>
+    {% endif %}
+  </div>
+  <div id="recommendation-result" style="padding:0 24px 24px">
+    <p class="muted">Run analysis after the deterministic checks identify a rightsizing candidate.</p>
+  </div>
+</section>
+
 {# ── Cost & Potential Savings (Stage 5) ──────────────────────────────────── #}
 <section class="panel" style="margin-top:32px">
   <div class="panel-heading">
