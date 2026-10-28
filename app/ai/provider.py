@@ -101,13 +101,19 @@ class OpenAICompatibleProvider(LLMProvider):
         payload = {
             "model": self._model,
             "temperature": 0,
+            "max_tokens": 1000,
             "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "Return only JSON matching the RecommendationDraft schema. "
-                        "Never invent evidence, credentials, actions, or metrics."
+                        "You are CloudSage's recommendation formatter. Return ONLY one JSON object, "
+                        "with these top-level keys: decision, optimization_type, "
+                        "current_configuration, recommended_configuration, reasoning, evidence, "
+                        "concerns, required_validation, risk, confidence. Do not wrap it in another "
+                        "object. Do not repeat the input context. Use decision='needs_more_data' "
+                        "when no safe target is available. Never invent evidence, credentials, "
+                        "actions, or metrics. Keep each array to at most three short items."
                     ),
                 },
                 {"role": "user", "content": json.dumps(context.model_dump(mode="json"))},
@@ -118,7 +124,14 @@ class OpenAICompatibleProvider(LLMProvider):
             response.raise_for_status()
             body: dict[str, Any] = response.json()
             content = body["choices"][0]["message"]["content"]
-            return RecommendationDraft.model_validate(json.loads(_extract_json(content)))
+            parsed = json.loads(_extract_json(content))
+            if isinstance(parsed, dict):
+                for wrapper_key in ("recommendation_draft", "recommendation"):
+                    if isinstance(parsed.get(wrapper_key), dict):
+                        parsed = parsed[wrapper_key]
+                        break
+                parsed = _normalize_model_shape(parsed)
+            return RecommendationDraft.model_validate(parsed)
         except httpx.HTTPStatusError as exc:
             detail = "provider returned an HTTP error"
             try:
@@ -126,9 +139,11 @@ class OpenAICompatibleProvider(LLMProvider):
                 if isinstance(error_body, dict):
                     provider_error = error_body.get("error", {})
                     if isinstance(provider_error, dict):
-                        detail = provider_error.get("message", detail)
+                        detail = provider_error.get("message", error_body.get("message", detail))
                     elif isinstance(provider_error, str):
                         detail = provider_error
+                    elif isinstance(error_body.get("message"), str):
+                        detail = error_body["message"]
                 elif isinstance(error_body, list) and error_body:
                     first_error = error_body[0]
                     if isinstance(first_error, dict):
@@ -141,7 +156,9 @@ class OpenAICompatibleProvider(LLMProvider):
                 f"LLM provider returned HTTP {exc.response.status_code}: {detail}"
             ) from exc
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise LLMProviderError("LLM provider response was unavailable or invalid") from exc
+            raise LLMProviderError(
+                f"LLM provider response was unavailable or invalid ({type(exc).__name__}: {exc})"
+            ) from exc
 
 
 def _extract_json(content: str) -> str:
@@ -151,4 +168,40 @@ def _extract_json(content: str) -> str:
     if fenced:
         return fenced.group(1).strip()
     return cleaned
+
+
+def _normalize_model_shape(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize common lightweight-model shape drift before schema validation."""
+    normalized = dict(payload)
+    current = normalized.get("current_configuration")
+    if isinstance(current, dict):
+        normalized["current_configuration"] = {
+            "instance_type": current.get("instance_type", "")
+        }
+    else:
+        normalized["current_configuration"] = {}
+
+    proposed = normalized.get("recommended_configuration")
+    normalized["recommended_configuration"] = proposed if isinstance(proposed, dict) else {}
+
+    for field in ("reasoning", "concerns", "required_validation"):
+        value = normalized.get(field, [])
+        normalized[field] = [value] if isinstance(value, str) else value
+
+    evidence = normalized.get("evidence", [])
+    if isinstance(evidence, list):
+        normalized["evidence"] = [
+            item if isinstance(item, dict) else {"source": "model", "statement": str(item)}
+            for item in evidence
+        ]
+    else:
+        normalized["evidence"] = []
+
+    risk = normalized.get("risk")
+    normalized["risk"] = risk.lower() if isinstance(risk, str) and risk.lower() in {"low", "medium", "high"} else "medium"
+
+    confidence = normalized.get("confidence")
+    if not isinstance(confidence, (int, float)):
+        normalized["confidence"] = 0.5
+    return normalized
 

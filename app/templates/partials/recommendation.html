@@ -68,9 +68,20 @@
   {% endif %}
 
   {% if recommendation.decision == 'recommend' %}
+  {% if workflow_status == 'pending' %}
   <div class="approval-placeholder">
-    Recommendation generated. Approval workflow will be added before Terraform changes are enabled.
+    <strong>Recommendation workflow status:</strong> Pending human decision.
+    <div style="margin-top:12px;display:flex;gap:10px">
+      <button class="button primary" hx-post="/instances/{{ instance_id }}/recommendation/approve" hx-target="#recommendation-result" hx-swap="innerHTML">Approve recommendation</button>
+      <button class="button secondary" hx-post="/instances/{{ instance_id }}/recommendation/reject" hx-target="#recommendation-result" hx-swap="innerHTML">Reject recommendation</button>
+    </div>
   </div>
+  {% else %}
+  <div class="approval-placeholder">
+    <strong>Workflow status:</strong> {{ workflow_status|title }} by {{ workflow_actor }} at {{ workflow_decided_at }}.
+    {% if workflow_status == 'rejected' %} Terraform changes are blocked.{% endif %}
+  </div>
+  {% endif %}
   {% endif %}
 </div>
 {% elif candidate_result %}

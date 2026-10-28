@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -30,6 +31,10 @@ app.mount(
     StaticFiles(directory=Path(__file__).parent / "static"),
     name="static",
 )
+
+# Stage 7 local workflow store. This is intentionally in-memory until the
+# persistence stage; one current recommendation is retained per EC2 instance.
+_recommendations: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -259,12 +264,83 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
             },
         )
 
+    recommendation_record = _recommendations.get(instance_id)
+    if recommendation_record and recommendation_record["version"] == recommendation.model_dump_json():
+        recommendation_id = recommendation_record["id"]
+        workflow_status = recommendation_record["status"]
+        created_at = recommendation_record["created_at"]
+    else:
+        recommendation_id = f"rec-{instance_id}"
+        workflow_status = "pending"
+        created_at = datetime.now(UTC).isoformat()
+        _recommendations[instance_id] = {
+            "id": recommendation_id,
+            "instance_id": instance_id,
+            "recommendation": recommendation.model_dump(),
+            "version": recommendation.model_dump_json(),
+            "status": workflow_status,
+            "actor": None,
+            "decided_at": None,
+            "created_at": created_at,
+        }
+
     return templates.TemplateResponse(
         request=request,
         name="partials/recommendation.html",
         context={
             "recommendation": recommendation.model_dump(),
+            "instance_id": instance_id,
             "provider_name": provider_name,
             "provider_error": provider_error,
+            "recommendation_id": recommendation_id,
+            "workflow_status": workflow_status,
+            "workflow_actor": recommendation_record["actor"] if recommendation_record else None,
+            "workflow_decided_at": recommendation_record["decided_at"] if recommendation_record else None,
         },
     )
+
+
+def _update_recommendation(request: Request, instance_id: str, status: str) -> HTMLResponse:
+    record = _recommendations.get(instance_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Recommendation not found; analyze the instance first")
+    if record["status"] != "pending":
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/recommendation.html",
+            context={
+                "recommendation": record["recommendation"],
+                "provider_name": "stored recommendation",
+                "recommendation_id": record["id"],
+                "workflow_status": record["status"],
+                "workflow_actor": record["actor"],
+                "workflow_decided_at": record["decided_at"],
+            },
+        )
+
+    actor = request.headers.get("X-User", "local-user")
+    record["status"] = status
+    record["actor"] = actor
+    record["decided_at"] = datetime.now(UTC).isoformat()
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/recommendation.html",
+        context={
+            "recommendation": record["recommendation"],
+            "provider_name": "stored recommendation",
+            "recommendation_id": record["id"],
+            "workflow_status": record["status"],
+            "workflow_actor": record["actor"],
+            "workflow_decided_at": record["decided_at"],
+        },
+    )
+
+
+@app.post("/instances/{instance_id}/recommendation/approve", response_class=HTMLResponse)
+def approve_recommendation(request: Request, instance_id: str) -> HTMLResponse:
+    return _update_recommendation(request, instance_id, "approved")
+
+
+@app.post("/instances/{instance_id}/recommendation/reject", response_class=HTMLResponse)
+def reject_recommendation(request: Request, instance_id: str) -> HTMLResponse:
+    return _update_recommendation(request, instance_id, "rejected")
