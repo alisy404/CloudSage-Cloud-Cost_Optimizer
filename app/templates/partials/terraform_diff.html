@@ -1,9 +1,18 @@
 {% if terraform_error %}
-<div class="alert-error"><strong>Terraform diff unavailable:</strong> {{ terraform_error }}</div>
+<div class="alert-error"><strong>Terraform workflow blocked:</strong> {{ terraform_error }}</div>
 {% elif terraform_diff %}
 <div class="recommendation-card">
   <h4>Review-only Terraform diff</h4>
   <p class="muted">{{ terraform_diff.resource_address }} · no files changed · no apply executed</p>
   <pre style="overflow:auto;padding:16px;background:#0c1322;border-radius:8px"><code>{{ terraform_diff.unified_diff }}</code></pre>
+  <button class="button secondary" hx-post="/instances/{{ terraform_diff.instance_id }}/terraform/plan" hx-target="#terraform-diff" hx-swap="innerHTML">Generate and validate plan</button>
+</div>
+{% elif terraform_plan %}
+<div class="recommendation-card">
+  <h4>Terraform plan safety summary</h4>
+  <p>add={{ terraform_plan.add }}, change={{ terraform_plan.change }}, destroy={{ terraform_plan.destroy }}</p>
+  {% if plan_status == 'pending' %}
+  <button class="button primary" hx-post="/instances/{{ plan_instance_id }}/terraform/plan/approve" hx-target="#terraform-diff" hx-swap="innerHTML">Approve Terraform plan</button>
+  {% else %}<p><strong>Plan approved.</strong> Apply remains disabled by safety policy.</p>{% endif %}
 </div>
 {% endif %}

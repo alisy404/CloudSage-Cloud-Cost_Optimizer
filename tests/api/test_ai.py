@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import settings
-from app.main import _recommendations, app
+from app.main import _plans, _recommendations, app
 
 
 @pytest.fixture(autouse=True)
@@ -13,6 +13,7 @@ def _force_fake_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "aws_region", "ap-south-1")
     monkeypatch.setattr(settings, "llm_provider", "fake")
     _recommendations.clear()
+    _plans.clear()
 
 
 client = TestClient(app)
@@ -81,3 +82,21 @@ def test_terraform_diff_requires_approval_and_is_review_only() -> None:
     assert "Review-only Terraform diff" in after.text
     assert "aws_instance.api_server" in after.text
     assert "no apply executed" in after.text
+
+
+def test_plan_requires_recommendation_approval_and_apply_stays_disabled() -> None:
+    client.post("/instances/i-0123456789abcdef0/analyze")
+    not_approved = client.post("/instances/i-0123456789abcdef0/terraform/plan")
+    assert "requires recommendation approval" in not_approved.text
+
+    client.post("/instances/i-0123456789abcdef0/recommendation/approve")
+    plan = client.post("/instances/i-0123456789abcdef0/terraform/plan")
+    assert plan.status_code == 200
+    assert "add=0, change=1, destroy=0" in plan.text
+
+    not_approved_plan = client.post("/instances/i-0123456789abcdef0/terraform/apply")
+    assert "requires plan approval" in not_approved_plan.text
+
+    client.post("/instances/i-0123456789abcdef0/terraform/plan/approve")
+    disabled_apply = client.post("/instances/i-0123456789abcdef0/terraform/apply")
+    assert "disabled by safety policy" in disabled_apply.text

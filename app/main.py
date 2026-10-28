@@ -24,6 +24,12 @@ from app.aws.ec2 import BotoEC2Adapter, EC2Client, FakeEC2Adapter
 from app.aws.pricing import get_instance_pricing
 from app.config import settings
 from app.terraform.diff import TerraformDiffError, generate_instance_type_diff
+from app.terraform.workflow import (
+    PlanSummary,
+    TerraformWorkflowError,
+    require_apply_enabled,
+    validate_plan,
+)
 
 app = FastAPI(title="CloudSage", version="0.3.0")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -36,6 +42,7 @@ app.mount(
 # Stage 7 local workflow store. This is intentionally in-memory until the
 # persistence stage; one current recommendation is retained per EC2 instance.
 _recommendations: dict[str, dict] = {}
+_plans: dict[str, dict] = {}
 
 # Explicit mapping only. Stage 8 does not infer Terraform ownership from tags.
 _terraform_mappings = {
@@ -381,3 +388,56 @@ def terraform_diff(request: Request, instance_id: str) -> HTMLResponse:
         name="partials/terraform_diff.html",
         context={"terraform_diff": diff},
     )
+
+
+@app.post("/instances/{instance_id}/terraform/plan", response_class=HTMLResponse)
+def terraform_plan(request: Request, instance_id: str) -> HTMLResponse:
+    record = _recommendations.get(instance_id)
+    if not record or record["status"] != "approved":
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/terraform_diff.html",
+            context={"terraform_error": "Terraform plan requires recommendation approval"},
+        )
+    address = _terraform_mappings.get(instance_id)
+    try:
+        if not address:
+            raise TerraformWorkflowError("Terraform mapping is missing or ambiguous")
+        summary = PlanSummary(add=0, change=1, destroy=0, resource_addresses=(address,))
+        validate_plan(summary, address)
+        _plans[instance_id] = {"status": "pending", "actor": None, "summary": summary}
+    except TerraformWorkflowError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/terraform_diff.html",
+            context={"terraform_error": str(exc)},
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/terraform_diff.html",
+        context={"terraform_plan": summary, "plan_status": "pending", "plan_instance_id": instance_id},
+    )
+
+
+@app.post("/instances/{instance_id}/terraform/plan/approve", response_class=HTMLResponse)
+def approve_terraform_plan(request: Request, instance_id: str) -> HTMLResponse:
+    plan = _plans.get(instance_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Terraform plan not found")
+    if plan["status"] != "pending":
+        return templates.TemplateResponse(request=request, name="partials/terraform_diff.html", context={"terraform_error": "Terraform plan is already decided"})
+    plan["status"] = "approved"
+    plan["actor"] = request.headers.get("X-User", "local-user")
+    return templates.TemplateResponse(request=request, name="partials/terraform_diff.html", context={"terraform_plan": plan["summary"], "plan_status": "approved", "plan_instance_id": instance_id})
+
+
+@app.post("/instances/{instance_id}/terraform/apply", response_class=HTMLResponse)
+def apply_terraform_plan(request: Request, instance_id: str) -> HTMLResponse:
+    plan = _plans.get(instance_id)
+    try:
+        if not plan or plan["status"] != "approved":
+            raise TerraformWorkflowError("Terraform apply requires plan approval")
+        require_apply_enabled(settings.terraform_apply_enabled)
+    except TerraformWorkflowError as exc:
+        return templates.TemplateResponse(request=request, name="partials/terraform_diff.html", context={"terraform_error": str(exc)})
+    raise HTTPException(status_code=501, detail="Terraform apply executor is not implemented")

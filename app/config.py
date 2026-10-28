@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     # Keep the UI responsive when the external provider is overloaded.
     llm_timeout_seconds: float = 10.0
+    terraform_apply_enabled: bool = False
 
 
 settings = Settings()
