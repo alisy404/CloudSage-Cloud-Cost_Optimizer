@@ -8,7 +8,7 @@ Decision flow (fail-fast, ordered)
 ------------------------------------
 1. Instance not running          → not_candidate
 2. CPU data unavailable          → needs_more_data
-3. CPU insufficient history      → needs_more_data
+3. CPU insufficient history      → needs_more_data (unless test mode is enabled)
 4. Status check failed > 0       → not_candidate  (health gate)
 5. CPU average ≥ avg_threshold   → not_candidate
 6. CPU P95 ≥ p95_threshold       → not_candidate  (spike safety)
@@ -54,6 +54,7 @@ def evaluate(
     cpu_avg_threshold: float = 10.0,
     cpu_p95_threshold: float = 25.0,
     cpu_max_threshold: float = 50.0,
+    allow_short_window: bool = False,
 ) -> CandidateResult:
     """Run the deterministic candidate evaluation.
 
@@ -69,6 +70,9 @@ def evaluate(
         CPU P95 must be **below** this (spike safety gate).
     cpu_max_threshold:
         CPU maximum must be **below** this (burst safety gate).
+    allow_short_window:
+        Testing-only override. If true, available short-window CPU data is
+        evaluated and maximum is used as a temporary P95 proxy when needed.
 
     Returns
     -------
@@ -121,12 +125,22 @@ def evaluate(
         )
 
     # ── 3. Sufficient CPU history ─────────────────────────────────────────────
-    cpu_sufficient = cpu.status == MetricStatus.ok
+    short_window_test_mode = (
+        allow_short_window
+        and cpu.status == MetricStatus.insufficient_data
+        and cpu.average is not None
+        and cpu.maximum is not None
+    )
+    cpu_sufficient = cpu.status == MetricStatus.ok or short_window_test_mode
     facts.append(
         AnalysisFact(
             label="CPU history sufficient for P95",
             observed=f"{cpu.sample_count} samples",
-            threshold="≥ 24 samples",
+            threshold=(
+                "test mode: available samples"
+                if short_window_test_mode
+                else "≥ 24 samples"
+            ),
             passed=cpu_sufficient,
         )
     )
@@ -193,11 +207,18 @@ def evaluate(
         )
 
     # ── 6. CPU P95 spike safety ───────────────────────────────────────────────
-    cpu_p95_ok = cpu.p95 is not None and cpu.p95 < cpu_p95_threshold
+    # In explicit test mode only, a short window has no statistically useful
+    # P95. Use maximum as a conservative proxy so the AI path can be tested.
+    cpu_p95_value = cpu.p95 if cpu.p95 is not None else cpu.maximum
+    cpu_p95_ok = cpu_p95_value is not None and cpu_p95_value < cpu_p95_threshold
     facts.append(
         AnalysisFact(
             label="CPU P95 (spike safety)",
-            observed=_fmt_pct(cpu.p95),
+            observed=(
+                f"{_fmt_pct(cpu_p95_value)} (test proxy)"
+                if short_window_test_mode and cpu.p95 is None
+                else _fmt_pct(cpu_p95_value)
+            ),
             threshold=f"< {cpu_p95_threshold:.0f} %",
             passed=cpu_p95_ok,
         )
@@ -206,7 +227,7 @@ def evaluate(
         return _result(
             instance_id=instance.id,
             decision=CandidateDecision.not_candidate,
-            reason=f"CPU P95 {_fmt_pct(cpu.p95)} exceeds spike-safety threshold {cpu_p95_threshold:.0f} %.",
+            reason=f"CPU P95 {_fmt_pct(cpu_p95_value)} exceeds spike-safety threshold {cpu_p95_threshold:.0f} %.",
             facts=facts,
             cpu_avg_threshold=cpu_avg_threshold,
             cpu_p95_threshold=cpu_p95_threshold,
@@ -240,7 +261,7 @@ def evaluate(
         decision=CandidateDecision.candidate,
         reason=(
             f"Low CPU utilisation confirmed: avg {_fmt_pct(cpu.average)}, "
-            f"P95 {_fmt_pct(cpu.p95)}, max {_fmt_pct(cpu.maximum)}. "
+            f"P95 {_fmt_pct(cpu_p95_value)}, max {_fmt_pct(cpu.maximum)}. "
             "No health issues detected. Safe to request AI analysis."
         ),
         facts=facts,

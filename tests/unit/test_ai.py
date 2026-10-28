@@ -15,6 +15,12 @@ from app.aws.ec2 import FakeEC2Adapter
 from app.models import CandidateDecision, EC2Instance
 
 
+def test_fenced_json_is_unwrapped() -> None:
+    from app.ai.provider import _extract_json
+
+    assert _extract_json("```json\n{\"ok\": true}\n```") == '{"ok": true}'
+
+
 def _candidate(instance: EC2Instance, metrics) -> object:
     return evaluate(instance, metrics, 10.0, 25.0, 50.0)
 

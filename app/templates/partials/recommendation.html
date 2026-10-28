@@ -4,6 +4,12 @@
 </div>
 {% elif recommendation %}
 <div class="recommendation-card">
+  {% if provider_error %}
+  <div class="alert-error" style="margin-bottom:16px">
+    <strong>AI provider unavailable:</strong> {{ provider_error }}<br>
+    Showing a deterministic recommendation from the current AWS evidence. No infrastructure changes were made.
+  </div>
+  {% endif %}
   <div class="recommendation-header">
     <div>
       <p class="eyebrow">{{ provider_name }} provider</p>

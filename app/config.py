@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     aws_region: str = "ap-south-1"
 
-    # When True the app uses real AWS APIs; when False it uses the fake adapter.
-    aws_mode: bool = False
+    # Real AWS is the default application mode. Tests may explicitly override
+    # this setting to use the offline adapters.
+    aws_mode: bool = True
 
     # Number of days of CloudWatch history to retrieve (7 first, 30 later).
     cloudwatch_window_days: int = 7
@@ -20,12 +21,16 @@ class Settings(BaseSettings):
     analysis_cpu_avg_threshold: float = 10.0   # % — average must be below this
     analysis_cpu_p95_threshold: float = 25.0   # % — P95 must be below this (spike safety)
     analysis_cpu_max_threshold: float = 50.0   # % — max must be below this (burst safety)
+    # Testing only: permits short CloudWatch history and uses maximum as a
+    # temporary P95 proxy when a real P95 cannot be calculated.
+    analysis_allow_short_window: bool = False
 
     llm_provider: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
     llm_base_url: str = ""
-    llm_timeout_seconds: float = 30.0
+    # Keep the UI responsive when the external provider is overloaded.
+    llm_timeout_seconds: float = 10.0
 
 
 settings = Settings()

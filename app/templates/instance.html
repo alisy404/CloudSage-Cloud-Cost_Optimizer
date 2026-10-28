@@ -184,12 +184,17 @@
       <p class="muted">AI explains the deterministic evidence; it cannot access AWS or run Terraform.</p>
     </div>
     {% if candidate_result and candidate_result.decision == 'candidate' and metrics %}
-    <button class="button primary"
+    <button type="button" class="button primary"
             hx-post="/instances/{{ instance.id }}/analyze"
             hx-target="#recommendation-result"
-            hx-swap="innerHTML">
+            hx-swap="innerHTML"
+            hx-disabled-elt="this"
+            hx-indicator="#analyze-loading"
+            data-analyze-url="/instances/{{ instance.id }}/analyze"
+            id="analyze-button">
       Analyze with AI
     </button>
+    <span id="analyze-loading" class="htmx-indicator muted" aria-live="polite">Analyzing…</span>
     {% else %}
     <span class="badge">Candidate required</span>
     {% endif %}
@@ -198,6 +203,43 @@
     <p class="muted">Run analysis after the deterministic checks identify a rightsizing candidate.</p>
   </div>
 </section>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const button = document.getElementById("analyze-button");
+    if (!button) return;
+
+    button.addEventListener("click", () => {
+      if (window.htmx) return;
+
+      const target = document.getElementById("recommendation-result");
+      button.disabled = true;
+      button.textContent = "Analyzing…";
+
+      fetch(button.dataset.analyzeUrl, {
+        method: "POST",
+        headers: {"HX-Request": "true"},
+      })
+        .then(async (response) => {
+          const html = await response.text();
+          if (!response.ok) throw new Error(`Analysis request failed (${response.status})`);
+          target.innerHTML = html;
+        })
+        .catch((error) => {
+          target.innerHTML = "";
+          const alert = document.createElement("div");
+          alert.className = "alert-error";
+          alert.innerHTML = "<strong>AI analysis unavailable:</strong> ";
+          alert.append(document.createTextNode(error.message));
+          target.append(alert);
+        })
+        .finally(() => {
+          button.disabled = false;
+          button.textContent = "Analyze with AI";
+        });
+    });
+  });
+</script>
 
 {# ── Cost & Potential Savings (Stage 5) ──────────────────────────────────── #}
 <section class="panel" style="margin-top:32px">

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -100,6 +101,7 @@ class OpenAICompatibleProvider(LLMProvider):
         payload = {
             "model": self._model,
             "temperature": 0,
+            "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "system",
@@ -116,7 +118,37 @@ class OpenAICompatibleProvider(LLMProvider):
             response.raise_for_status()
             body: dict[str, Any] = response.json()
             content = body["choices"][0]["message"]["content"]
-            return RecommendationDraft.model_validate(json.loads(content))
+            return RecommendationDraft.model_validate(json.loads(_extract_json(content)))
+        except httpx.HTTPStatusError as exc:
+            detail = "provider returned an HTTP error"
+            try:
+                error_body = exc.response.json()
+                if isinstance(error_body, dict):
+                    provider_error = error_body.get("error", {})
+                    if isinstance(provider_error, dict):
+                        detail = provider_error.get("message", detail)
+                    elif isinstance(provider_error, str):
+                        detail = provider_error
+                elif isinstance(error_body, list) and error_body:
+                    first_error = error_body[0]
+                    if isinstance(first_error, dict):
+                        provider_error = first_error.get("error", first_error)
+                        if isinstance(provider_error, dict):
+                            detail = provider_error.get("message", detail)
+            except (ValueError, TypeError):
+                pass
+            raise LLMProviderError(
+                f"LLM provider returned HTTP {exc.response.status_code}: {detail}"
+            ) from exc
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise LLMProviderError("LLM provider response was unavailable or invalid") from exc
+
+
+def _extract_json(content: str) -> str:
+    """Accept strict JSON plus the common fenced-JSON model response."""
+    cleaned = content.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    if fenced:
+        return fenced.group(1).strip()
+    return cleaned
 

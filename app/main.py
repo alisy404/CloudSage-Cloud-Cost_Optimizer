@@ -5,7 +5,12 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.ai.provider import FakeLLMProvider, LLMProvider, OpenAICompatibleProvider
+from app.ai.provider import (
+    FakeLLMProvider,
+    LLMProvider,
+    LLMProviderError,
+    OpenAICompatibleProvider,
+)
 from app.ai.service import analyze_optimization
 from app.analysis.candidate import evaluate as evaluate_candidate
 from app.analysis.savings import calculate_savings
@@ -161,6 +166,7 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
             cpu_avg_threshold=settings.analysis_cpu_avg_threshold,
             cpu_p95_threshold=settings.analysis_cpu_p95_threshold,
             cpu_max_threshold=settings.analysis_cpu_max_threshold,
+            allow_short_window=settings.analysis_allow_short_window,
         )
 
     # Deterministic savings and cost calculations (Stage 5).
@@ -194,7 +200,6 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
             request=request,
             name="partials/recommendation.html",
             context={"analysis_error": str(exc)},
-            status_code=502,
         )
     if instance is None:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -209,7 +214,6 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
             request=request,
             name="partials/recommendation.html",
             context={"analysis_error": str(exc)},
-            status_code=502,
         )
 
     candidate = evaluate_candidate(
@@ -218,9 +222,12 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
         cpu_avg_threshold=settings.analysis_cpu_avg_threshold,
         cpu_p95_threshold=settings.analysis_cpu_p95_threshold,
         cpu_max_threshold=settings.analysis_cpu_max_threshold,
+        allow_short_window=settings.analysis_allow_short_window,
     )
     savings = calculate_savings(instance=instance, candidate_result=candidate)
 
+    provider_error: str | None = None
+    provider_name = _get_llm_provider().provider_name
     try:
         _, recommendation = analyze_optimization(
             instance=instance,
@@ -229,6 +236,19 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
             savings=savings,
             provider=_get_llm_provider(),
         )
+    except LLMProviderError as exc:
+        # Keep the real AWS evidence useful when the external model is
+        # temporarily unavailable. This fallback does not call AWS or make
+        # changes; it produces a clearly labelled deterministic recommendation.
+        provider_error = str(exc)
+        _, recommendation = analyze_optimization(
+            instance=instance,
+            metrics=metrics,
+            candidate=candidate,
+            savings=savings,
+            provider=FakeLLMProvider(),
+        )
+        provider_name = "deterministic fallback"
     except (ValueError, RuntimeError) as exc:
         return templates.TemplateResponse(
             request=request,
@@ -237,7 +257,6 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
                 "analysis_error": str(exc),
                 "candidate_result": candidate.model_dump(),
             },
-            status_code=422,
         )
 
     return templates.TemplateResponse(
@@ -245,6 +264,7 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
         name="partials/recommendation.html",
         context={
             "recommendation": recommendation.model_dump(),
-            "provider_name": _get_llm_provider().provider_name,
+            "provider_name": provider_name,
+            "provider_error": provider_error,
         },
     )

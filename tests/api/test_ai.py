@@ -31,7 +31,7 @@ def test_analyze_candidate_returns_recommendation_ui() -> None:
 def test_analyze_non_candidate_is_safe() -> None:
     response = client.post("/instances/i-0fedcba9876543210/analyze")
 
-    assert response.status_code == 422
+    assert response.status_code == 200
     assert "AI analysis unavailable" in response.text
     assert "deterministic candidate" in response.text
 

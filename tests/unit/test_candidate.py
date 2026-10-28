@@ -123,6 +123,23 @@ def test_needs_more_data_when_insufficient_samples():
     assert "Only 3 CPU sample(s)" in result.reason
 
 
+def test_short_window_test_mode_uses_available_data():
+    """Testing mode allows a short window but remains threshold-gated."""
+    inst = _make_instance()
+    metrics = _make_metrics(
+        cpu_status=MetricStatus.insufficient_data,
+        cpu_avg=1.0,
+        cpu_p95=None,
+        cpu_max=1.5,
+        cpu_samples=1,
+    )
+
+    result = evaluate(inst, metrics, allow_short_window=True)
+
+    assert result.decision == CandidateDecision.candidate
+    assert any("test proxy" in fact.observed for fact in result.facts)
+
+
 def test_not_candidate_when_status_checks_failing():
     """Any status check failure blocks candidacy for stability."""
     inst = _make_instance()
