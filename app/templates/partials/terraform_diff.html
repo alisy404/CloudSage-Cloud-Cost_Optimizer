@@ -1,0 +1,9 @@
+{% if terraform_error %}
+<div class="alert-error"><strong>Terraform diff unavailable:</strong> {{ terraform_error }}</div>
+{% elif terraform_diff %}
+<div class="recommendation-card">
+  <h4>Review-only Terraform diff</h4>
+  <p class="muted">{{ terraform_diff.resource_address }} · no files changed · no apply executed</p>
+  <pre style="overflow:auto;padding:16px;background:#0c1322;border-radius:8px"><code>{{ terraform_diff.unified_diff }}</code></pre>
+</div>
+{% endif %}

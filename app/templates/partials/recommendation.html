@@ -80,6 +80,12 @@
   <div class="approval-placeholder">
     <strong>Workflow status:</strong> {{ workflow_status|title }} by {{ workflow_actor }} at {{ workflow_decided_at }}.
     {% if workflow_status == 'rejected' %} Terraform changes are blocked.{% endif %}
+    {% if workflow_status == 'approved' and recommendation.recommended_configuration.instance_type %}
+    <div style="margin-top:12px">
+      <button class="button secondary" hx-post="/instances/{{ instance_id }}/terraform/diff" hx-target="#terraform-diff" hx-swap="innerHTML">Generate Terraform diff</button>
+    </div>
+    <div id="terraform-diff" style="margin-top:16px"></div>
+    {% endif %}
   </div>
   {% endif %}
   {% endif %}

@@ -23,6 +23,7 @@ from app.aws.cloudwatch import (
 from app.aws.ec2 import BotoEC2Adapter, EC2Client, FakeEC2Adapter
 from app.aws.pricing import get_instance_pricing
 from app.config import settings
+from app.terraform.diff import TerraformDiffError, generate_instance_type_diff
 
 app = FastAPI(title="CloudSage", version="0.3.0")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -35,6 +36,11 @@ app.mount(
 # Stage 7 local workflow store. This is intentionally in-memory until the
 # persistence stage; one current recommendation is retained per EC2 instance.
 _recommendations: dict[str, dict] = {}
+
+# Explicit mapping only. Stage 8 does not infer Terraform ownership from tags.
+_terraform_mappings = {
+    "i-0123456789abcdef0": "aws_instance.api_server",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +321,7 @@ def _update_recommendation(request: Request, instance_id: str, status: str) -> H
                 "workflow_status": record["status"],
                 "workflow_actor": record["actor"],
                 "workflow_decided_at": record["decided_at"],
+                "instance_id": instance_id,
             },
         )
 
@@ -332,6 +339,7 @@ def _update_recommendation(request: Request, instance_id: str, status: str) -> H
             "workflow_status": record["status"],
             "workflow_actor": record["actor"],
             "workflow_decided_at": record["decided_at"],
+            "instance_id": instance_id,
         },
     )
 
@@ -344,3 +352,32 @@ def approve_recommendation(request: Request, instance_id: str) -> HTMLResponse:
 @app.post("/instances/{instance_id}/recommendation/reject", response_class=HTMLResponse)
 def reject_recommendation(request: Request, instance_id: str) -> HTMLResponse:
     return _update_recommendation(request, instance_id, "rejected")
+
+
+@app.post("/instances/{instance_id}/terraform/diff", response_class=HTMLResponse)
+def terraform_diff(request: Request, instance_id: str) -> HTMLResponse:
+    """Return a review-only Terraform diff for an approved recommendation."""
+    record = _recommendations.get(instance_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Recommendation not found; analyze the instance first")
+    try:
+        recommendation = record["recommendation"]
+        proposed = recommendation.get("recommended_configuration", {}).get("instance_type")
+        diff = generate_instance_type_diff(
+            instance_id=instance_id,
+            current_type=recommendation.get("current_configuration", {}).get("instance_type", ""),
+            proposed_type=proposed or "",
+            resource_address=_terraform_mappings.get(instance_id),
+            approved=record["status"] == "approved",
+        )
+    except TerraformDiffError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/terraform_diff.html",
+            context={"terraform_error": str(exc)},
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/terraform_diff.html",
+        context={"terraform_diff": diff},
+    )

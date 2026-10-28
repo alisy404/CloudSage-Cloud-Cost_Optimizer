@@ -68,3 +68,16 @@ def test_rejection_is_terminal_and_blocks_repeat_decision() -> None:
     assert repeated.status_code == 200
     assert "Rejected by local-user" in repeated.text
     assert _recommendations["i-0123456789abcdef0"]["status"] == "rejected"
+
+
+def test_terraform_diff_requires_approval_and_is_review_only() -> None:
+    client.post("/instances/i-0123456789abcdef0/analyze")
+    before = client.post("/instances/i-0123456789abcdef0/terraform/diff")
+    assert "requires an approved recommendation" in before.text
+
+    client.post("/instances/i-0123456789abcdef0/recommendation/approve")
+    after = client.post("/instances/i-0123456789abcdef0/terraform/diff")
+    assert after.status_code == 200
+    assert "Review-only Terraform diff" in after.text
+    assert "aws_instance.api_server" in after.text
+    assert "no apply executed" in after.text
