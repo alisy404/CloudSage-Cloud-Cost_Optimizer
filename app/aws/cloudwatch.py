@@ -31,7 +31,7 @@ from app.models import InstanceMetrics, MetricStatus, MetricSummary
 logger = logging.getLogger(__name__)
 
 # Minimum number of 1-hour datapoints required to report a P95 value.
-MIN_SAMPLES_FOR_P95 = 24  # 1 day worth of hourly data
+MIN_SAMPLES_FOR_P95 = 12  # one hour at the default five-minute period
 
 # CloudWatch metric definitions: (MetricName, Namespace, Unit, field_name)
 _METRIC_DEFS: list[tuple[str, str, str, str]] = [
@@ -54,6 +54,7 @@ def _compute_summary(
     datapoints: list[dict],
     window_start: datetime,
     window_end: datetime,
+    period_minutes: int | None = None,
 ) -> MetricSummary:
     """Build a MetricSummary from a raw list of CloudWatch datapoints.
 
@@ -68,6 +69,7 @@ def _compute_summary(
             name=name,
             unit=unit,
             period_days=period_days,
+            period_minutes=period_minutes,
             status=MetricStatus.unavailable,
             window_start=window_start,
             window_end=window_end,
@@ -94,6 +96,7 @@ def _compute_summary(
         name=name,
         unit=unit,
         period_days=period_days,
+        period_minutes=period_minutes,
         average=overall_avg,
         p95=p95,
         maximum=overall_max,
@@ -117,6 +120,7 @@ class CloudWatchClient(ABC):
         self,
         instance_id: str,
         window_days: int = 7,
+        window_minutes: int | None = None,
     ) -> InstanceMetrics:
         """Return metric summaries for the given EC2 instance."""
 
@@ -136,11 +140,13 @@ def _fake_summary(
     samples: int,
     window_start: datetime,
     window_end: datetime,
+    period_minutes: int | None = None,
 ) -> MetricSummary:
     return MetricSummary(
         name=name,
         unit=unit,
         period_days=period_days,
+        period_minutes=period_minutes,
         average=avg,
         p95=p95,
         maximum=maximum,
@@ -158,19 +164,21 @@ class FakeCloudWatchAdapter(CloudWatchClient):
         self,
         instance_id: str,
         window_days: int = 7,
+        window_minutes: int | None = None,
+        period_seconds: int | None = None,
     ) -> InstanceMetrics:
         now = datetime.now(UTC)
-        start = now - timedelta(days=window_days)
+        start = now - (timedelta(minutes=window_minutes) if window_minutes else timedelta(days=window_days))
 
         # api-server (running) — looks like a plausible rightsizing candidate.
         if instance_id == "i-0123456789abcdef0":
             return InstanceMetrics(
                 instance_id=instance_id,
                 fetched_at=now,
-                cpu=_fake_summary("CPUUtilization", "Percent", window_days, 4.2, 11.3, 22.8, 168, start, now),
-                network_in=_fake_summary("NetworkIn", "Bytes", window_days, 1_450_000, 3_200_000, 8_900_000, 168, start, now),
-                network_out=_fake_summary("NetworkOut", "Bytes", window_days, 980_000, 2_100_000, 5_600_000, 168, start, now),
-                status_check_failed=_fake_summary("StatusCheckFailed", "Count", window_days, 0.0, 0.0, 0.0, 168, start, now),
+                cpu=_fake_summary("CPUUtilization", "Percent", window_days, 4.2, 11.3, 22.8, 168, start, now, window_minutes),
+                network_in=_fake_summary("NetworkIn", "Bytes", window_days, 1_450_000, 3_200_000, 8_900_000, 168, start, now, window_minutes),
+                network_out=_fake_summary("NetworkOut", "Bytes", window_days, 980_000, 2_100_000, 5_600_000, 168, start, now, window_minutes),
+                status_check_failed=_fake_summary("StatusCheckFailed", "Count", window_days, 0.0, 0.0, 0.0, 168, start, now, window_minutes),
             )
 
         # worker-server (stopped) — not enough history.
@@ -196,7 +204,7 @@ class BotoCloudWatchAdapter(CloudWatchClient):
     raw boto3 exceptions.
     """
 
-    _PERIOD_SECONDS = 3600  # 1-hour granularity
+    _PERIOD_SECONDS = 3600  # 1-hour granularity in production fallback
 
     def __init__(self, region: str) -> None:
         self._region = region
@@ -206,9 +214,12 @@ class BotoCloudWatchAdapter(CloudWatchClient):
         self,
         instance_id: str,
         window_days: int = 7,
+        window_minutes: int | None = None,
+        period_seconds: int | None = None,
     ) -> InstanceMetrics:
         now = datetime.now(UTC)
-        window_start = now - timedelta(days=window_days)
+        window_start = now - (timedelta(minutes=window_minutes) if window_minutes else timedelta(days=window_days))
+        request_period = period_seconds or self._PERIOD_SECONDS
 
         summaries: dict[str, MetricSummary] = {}
         for metric_name, namespace, unit, field in _METRIC_DEFS:
@@ -220,6 +231,8 @@ class BotoCloudWatchAdapter(CloudWatchClient):
                 window_start=window_start,
                 window_end=now,
                 window_days=window_days,
+                period_minutes=window_minutes,
+                period_seconds=request_period,
             )
 
         return InstanceMetrics(
@@ -240,6 +253,8 @@ class BotoCloudWatchAdapter(CloudWatchClient):
         window_start: datetime,
         window_end: datetime,
         window_days: int,
+        period_minutes: int | None = None,
+        period_seconds: int | None = None,
     ) -> MetricSummary:
         try:
             response = self._client.get_metric_statistics(
@@ -248,7 +263,7 @@ class BotoCloudWatchAdapter(CloudWatchClient):
                 Dimensions=[{"Name": "InstanceId", "Value": instance_id}],
                 StartTime=window_start,
                 EndTime=window_end,
-                Period=self._PERIOD_SECONDS,
+                Period=period_seconds or self._PERIOD_SECONDS,
                 Statistics=["Average", "Maximum", "SampleCount"],
                 Unit=unit,
             )
@@ -263,6 +278,7 @@ class BotoCloudWatchAdapter(CloudWatchClient):
                 datapoints=datapoints,
                 window_start=window_start,
                 window_end=window_end,
+                period_minutes=period_minutes,
             )
         except ClientError as exc:
             code = exc.response["Error"]["Code"]

@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     # this setting to use the offline adapters.
     aws_mode: bool = True
 
-    # Number of days of CloudWatch history to retrieve (7 first, 30 later).
+    # Testing default: collect the immediately available last 60 minutes.
+    # Set to 0 to use cloudwatch_window_days for the production history mode.
+    cloudwatch_window_minutes: int = 60
     cloudwatch_window_days: int = 7
+    cloudwatch_period_seconds: int = 300
 
     # Deterministic analysis thresholds (Stage 4).
     # An instance is a rightsizing candidate only when ALL three are satisfied.

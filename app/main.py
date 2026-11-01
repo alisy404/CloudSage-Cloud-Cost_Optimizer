@@ -171,6 +171,8 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
         metrics = cw.get_instance_metrics(
             instance_id=instance_id,
             window_days=settings.cloudwatch_window_days,
+            window_minutes=settings.cloudwatch_window_minutes or None,
+            period_seconds=settings.cloudwatch_period_seconds,
         )
     except RuntimeError as exc:
         metrics_error = str(exc)
@@ -199,6 +201,7 @@ def instance_detail(request: Request, instance_id: str) -> HTMLResponse:
             "metrics": metrics.model_dump() if metrics else None,
             "metrics_error": metrics_error,
             "window_days": settings.cloudwatch_window_days,
+            "window_minutes": settings.cloudwatch_window_minutes or None,
             "candidate_result": candidate_result.model_dump() if candidate_result else None,
             "savings": savings.model_dump(),
         },
@@ -226,6 +229,8 @@ def analyze_instance(request: Request, instance_id: str) -> HTMLResponse:
         metrics = cw.get_instance_metrics(
             instance_id=instance_id,
             window_days=settings.cloudwatch_window_days,
+            window_minutes=settings.cloudwatch_window_minutes or None,
+            period_seconds=settings.cloudwatch_period_seconds,
         )
     except RuntimeError as exc:
         return templates.TemplateResponse(
