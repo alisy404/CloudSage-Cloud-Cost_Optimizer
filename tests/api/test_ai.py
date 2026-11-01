@@ -10,7 +10,7 @@ from app.main import _plans, _recommendations, app
 @pytest.fixture(autouse=True)
 def _force_fake_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "aws_mode", False)
-    monkeypatch.setattr(settings, "aws_region", "ap-south-1")
+    monkeypatch.setattr(settings, "aws_region", "us-east-1")
     monkeypatch.setattr(settings, "llm_provider", "fake")
     _recommendations.clear()
     _plans.clear()
@@ -100,3 +100,10 @@ def test_plan_requires_recommendation_approval_and_apply_stays_disabled() -> Non
     client.post("/instances/i-0123456789abcdef0/terraform/plan/approve")
     disabled_apply = client.post("/instances/i-0123456789abcdef0/terraform/apply")
     assert "disabled by safety policy" in disabled_apply.text
+
+    # The UI must expose the apply state after plan approval, even though the
+    # action remains disabled by default.
+    approved_plan = client.post("/instances/i-0123456789abcdef0/terraform/plan")
+    assert "Apply Terraform plan (disabled)" not in approved_plan.text
+    approved_plan = client.post("/instances/i-0123456789abcdef0/terraform/plan/approve")
+    assert "Apply Terraform plan (disabled)" in approved_plan.text

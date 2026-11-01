@@ -13,6 +13,10 @@
   <p>add={{ terraform_plan.add }}, change={{ terraform_plan.change }}, destroy={{ terraform_plan.destroy }}</p>
   {% if plan_status == 'pending' %}
   <button class="button primary" hx-post="/instances/{{ plan_instance_id }}/terraform/plan/approve" hx-target="#terraform-diff" hx-swap="innerHTML">Approve Terraform plan</button>
-  {% else %}<p><strong>Plan approved.</strong> Apply remains disabled by safety policy.</p>{% endif %}
+  {% else %}
+  <p><strong>Plan approved.</strong></p>
+  <button class="button secondary" disabled title="Terraform apply is disabled by safety policy">Apply Terraform plan (disabled)</button>
+  <p class="muted" style="margin-top:8px">Apply is intentionally disabled until the controlled-apply stage is completed and enabled in server settings.</p>
+  {% endif %}
 </div>
 {% endif %}

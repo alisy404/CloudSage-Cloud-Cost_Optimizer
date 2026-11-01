@@ -1,0 +1,2 @@
+aws_region = "us-east-1"
+ami_id     = "ami-REPLACE_WITH_A_REGION_VALID_AMI"

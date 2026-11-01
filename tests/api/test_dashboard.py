@@ -16,7 +16,7 @@ from app.main import app
 def _force_fake_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure every test in this module uses offline fake adapters."""
     monkeypatch.setattr(settings, "aws_mode", False)
-    monkeypatch.setattr(settings, "aws_region", "ap-south-1")
+    monkeypatch.setattr(settings, "aws_region", "us-east-1")
 
 
 client = TestClient(app)

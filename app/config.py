@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "development"
-    aws_region: str = "ap-south-1"
+    aws_region: str = "us-east-1"
 
     # Real AWS is the default application mode. Tests may explicitly override
     # this setting to use the offline adapters.

@@ -24,6 +24,7 @@ from app.aws.ec2 import BotoEC2Adapter, EC2Client, FakeEC2Adapter
 from app.aws.pricing import get_instance_pricing
 from app.config import settings
 from app.terraform.diff import TerraformDiffError, generate_instance_type_diff
+from app.terraform.discovery import TerraformDiscoveryError, discover_ec2_resources
 from app.terraform.workflow import (
     PlanSummary,
     TerraformWorkflowError,
@@ -44,10 +45,11 @@ app.mount(
 _recommendations: dict[str, dict] = {}
 _plans: dict[str, dict] = {}
 
-# Explicit mapping only. Stage 8 does not infer Terraform ownership from tags.
+# Demo fallback mapping; real resources are resolved from local Terraform state.
 _terraform_mappings = {
     "i-0123456789abcdef0": "aws_instance.api_server",
 }
+_terraform_dir = Path(__file__).parent.parent / "aws"
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +81,20 @@ def _get_llm_provider() -> LLMProvider:
             timeout=settings.llm_timeout_seconds,
         )
     return FakeLLMProvider()
+
+
+def _terraform_resource_for(instance_id: str):
+    """Resolve an EC2 instance to its local Terraform state resource."""
+    try:
+        resources = discover_ec2_resources(_terraform_dir)
+    except TerraformDiscoveryError:
+        resources = []
+    resource = next((item for item in resources if item.instance_id == instance_id), None)
+    if resource:
+        return resource
+    # Keep the offline demo workflow working without a Terraform checkout.
+    address = _terraform_mappings.get(instance_id)
+    return type("TerraformResourceFallback", (), {"address": address})() if address else None
 
 
 # ---------------------------------------------------------------------------
@@ -375,11 +391,12 @@ def terraform_diff(request: Request, instance_id: str) -> HTMLResponse:
     try:
         recommendation = record["recommendation"]
         proposed = recommendation.get("recommended_configuration", {}).get("instance_type")
+        resource = _terraform_resource_for(instance_id)
         diff = generate_instance_type_diff(
             instance_id=instance_id,
             current_type=recommendation.get("current_configuration", {}).get("instance_type", ""),
             proposed_type=proposed or "",
-            resource_address=_terraform_mappings.get(instance_id),
+            resource_address=resource.address if resource else None,
             approved=record["status"] == "approved",
         )
     except TerraformDiffError as exc:
@@ -404,7 +421,8 @@ def terraform_plan(request: Request, instance_id: str) -> HTMLResponse:
             name="partials/terraform_diff.html",
             context={"terraform_error": "Terraform plan requires recommendation approval"},
         )
-    address = _terraform_mappings.get(instance_id)
+    resource = _terraform_resource_for(instance_id)
+    address = resource.address if resource else None
     try:
         if not address:
             raise TerraformWorkflowError("Terraform mapping is missing or ambiguous")
