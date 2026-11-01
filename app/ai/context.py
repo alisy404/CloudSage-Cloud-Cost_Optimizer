@@ -42,7 +42,6 @@ def build_context(
         },
         metrics={
             "window_days": metrics.cpu.period_days,
-            "window_minutes": metrics.cpu.period_minutes,
             "cpu": metrics.cpu.model_dump(mode="json"),
             "network_in": metrics.network_in.model_dump(mode="json"),
             "network_out": metrics.network_out.model_dump(mode="json"),

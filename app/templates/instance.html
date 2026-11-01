@@ -40,7 +40,7 @@
   <div class="panel-heading">
     <div>
       <h2>CloudWatch metrics</h2>
-      <p class="muted">{% if window_minutes %}last {{ window_minutes }} minutes{% else %}{{ window_days }}-day window{% endif %}{% if metrics %} · fetched {{ metrics.fetched_at.strftime("%Y-%m-%d %H:%M UTC") }}{% endif %}</p>
+      <p class="muted">{{ window_days }}-day window{% if metrics %} · fetched {{ metrics.fetched_at.strftime("%Y-%m-%d %H:%M UTC") }}{% endif %}</p>
     </div>
     {% if metrics %}
     <span class="badge">{{ window_days }}d</span>

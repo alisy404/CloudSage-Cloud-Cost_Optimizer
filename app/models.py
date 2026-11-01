@@ -35,7 +35,6 @@ class MetricSummary(BaseModel):
     name: str  # e.g. "CPUUtilization"
     unit: str  # e.g. "Percent", "Bytes", "Count"
     period_days: int
-    period_minutes: int | None = None
 
     # Aggregates — None means the metric was not available / not enough data.
     average: float | None = None
