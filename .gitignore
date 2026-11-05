@@ -8,6 +8,5 @@ __pycache__/
 .terraform/
 .terraform.lock.hcl
 aws
-variables.tf
-terraform.tfvars.example
 aws/terraform.tfvars.example
+aws/terraform.tfvars

@@ -9,12 +9,14 @@ the state `id` to the AWS instance ID.
 
 ```bash
 cd /home/bob/projects/cloudsage/aws
-cp terraform.tfvars.example terraform.tfvars
-# Replace ami_id with a Linux AMI valid in us-east-1.
+# Edit terraform.tfvars once if the AMI needs to change.
 terraform init
 terraform validate
 terraform plan
 ```
+
+Terraform automatically loads `terraform.tfvars`, so subsequent `plan` and
+`apply` commands do not prompt for `ami_id` or `aws_region`.
 
 Do not run `terraform apply` until the instance has been reviewed. The
 CloudSage application never runs Terraform apply.

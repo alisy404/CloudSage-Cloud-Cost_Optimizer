@@ -1,14 +1,3 @@
-variable "aws_region" {
-  type        = string
-  description = "AWS region where the test instance is created."
-  default     = "us-east-1"
-}
-
-variable "ami_id" {
-  type        = string
-  description = "A valid Linux AMI ID for the selected region."
-}
-
 resource "aws_instance" "cloudsage_test" {
   ami           = var.ami_id
   instance_type = "t3.micro"
